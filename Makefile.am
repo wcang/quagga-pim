@@ -15,3 +15,15 @@ EXTRA_DIST = aclocal.m4 SERVICES TODO REPORTING-BUGS INSTALL.quagga.txt \
 	tools/zebra.el tools/multiple-bgpd.sh
 
 ACLOCAL_AMFLAGS = -I m4
+
+.PHONY: cscope
+
+clean-local:
+	-rm -vf cscope.out
+
+cscope.out:
+	find  -name '*.c' -o -name '*.h' > cscope.files
+	cscope -b
+	-rm -vf cscope.files
+
+cscope: clean-local cscope.out
