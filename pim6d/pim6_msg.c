@@ -207,6 +207,7 @@ pim6_hello_recv(struct in6_addr *src, struct in6_addr *dst,
     } 
   }
   
+  THREAD_OFF(pn->thread_expiry_timer);
   tlv = (struct pim_tlv *) ((caddr_t) ph + sizeof(struct pim_header));
   msg_len -= sizeof(struct pim_header);
 
@@ -271,7 +272,6 @@ pim6_hello_recv(struct in6_addr *src, struct in6_addr *dst,
   
   /* reschedule expiry timer if the expiry time wasn't infinity */
   if (pn->holdtime != 0xffff) {
-    THREAD_OFF(pn->thread_expiry_timer);
     pn->thread_expiry_timer = thread_add_timer(master, expire_neighbor, pn, pn->holdtime);
   }
 
