@@ -55,3 +55,6 @@ pim6_neighbor_create (struct pim6_interface * pi, struct in6_addr * addr);
 void
 pim6_neighbor_delete (struct pim6_neighbor * pn);
 
+void
+pim6_neighbor_cmd_init(void);
+

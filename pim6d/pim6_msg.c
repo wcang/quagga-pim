@@ -176,9 +176,9 @@ expire_neighbor(struct thread *thread)
   struct pim6_neighbor * pn;
 
   pn = (struct pim6_neighbor *) THREAD_ARG(thread);
-
-  zlog_info("A PIM neighbor on interface %s expired", pn->pi->interface->name);
-
+  THREAD_OFF(pn->thread_expiry_timer);
+  zlog_debug("PIM neighbor %s on interface %s expired", in6_addr2str(&pn->addr), pn->pi->interface->name);
+  pim6_neighbor_delete(pn);
   return 0;
 }
 
@@ -260,7 +260,7 @@ pim6_hello_recv(struct in6_addr *src, struct in6_addr *dst,
         /* TODO */
         break;
       default:
-        zlog_err("Unrecognized option type %u for PIM Hello TLV\n", tlv->type);
+        zlog_warn("Unrecognized option type %u for PIM Hello TLV\n", tlv->type);
         break;
     }
 
@@ -391,7 +391,7 @@ pim6_hello_send(struct thread *thread)
   pi->thread_hello_timer = (struct thread *) NULL;
   zlog_debug("pim6_hello_send on interface %s", ifp->name);
   
-  if (!pi->enabled || !pi->local_addr) {
+  if ((!pi->enabled && pi->hello_interval != 0) || !pi->local_addr) {
     zlog_warn("Possible error. PIM is not enabled or local address is not set on interface %s", ifp->name);
     return 0;
   }

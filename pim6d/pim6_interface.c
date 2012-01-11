@@ -152,7 +152,7 @@ pim6_interface_show (struct vty *vty, struct interface *ifp)
   }
   else {
     /* FIXME: Get the neighbour count right, for now let's put 0 for neighbour count */
-    vty_out(vty, "%-20s%-4s%-6d%-7d%d%s", ifp->name, "on", 0, pi->hello_interval, pi->dr_priority, VTY_NEWLINE);
+    vty_out(vty, "%-20s%-4s%-6d%-7d%d%s", ifp->name, (pi->enabled) ? "on" : "off" , 0, pi->hello_interval, pi->dr_priority, VTY_NEWLINE);
     vty_out(vty, "Address: %s%s", in6_addr2str(pi->local_addr), VTY_NEWLINE);
     /* FIXME: print "this system" if this interface is selected as DR */
     vty_out(vty, "DR     : not elected%s", VTY_NEWLINE);
@@ -273,14 +273,31 @@ DEFUN (ipv6_pim,
   assert (ifp);
 
   pi = (struct pim6_interface *) ifp->info;
-  if (pi == NULL)
+  
+  if (pi == NULL) {
     pi = pim6_interface_create(ifp);
+  }
+
   assert(pi);
   pi->enabled = 1;
-  pi->thread_hello_timer = thread_execute(master, pim6_hello_send, ifp, 0);
+  
+  if (if_is_up(ifp) && ifp->ifindex) {
+    pi->thread_hello_timer = thread_execute(master, pim6_hello_send, ifp, 0);
+    pim6_join_allpim6routers(ifp->ifindex);
+  }
+
   return CMD_SUCCESS;
 }
 
+static void pim6_interface_purge_neighbors(struct pim6_interface * pi)
+{
+  struct listnode *node, *nnode;
+  struct pim6_neighbor * pn;
+
+  for (ALL_LIST_ELEMENTS(pi->neighbor_list, node, nnode, pn)) {
+    pim6_neighbor_delete(pn);
+  }
+}
 
 DEFUN (no_ipv6_pim,
        no_ipv6_pim_cmd,
@@ -314,7 +331,9 @@ DEFUN (no_ipv6_pim,
   pi->thread_hello_timer = thread_execute(master, pim6_hello_send, ifp, 0);
   /* reset all values to default */
   pi->hello_interval = PIM_DEF_HELLO_INTERVAL;
-  pi->dr_priority = PIM_DEF_DR_PRIOR; 
+  pi->dr_priority = PIM_DEF_DR_PRIOR;
+  /* remove all PIM neighbors */
+  pim6_interface_purge_neighbors(pi);
   return CMD_SUCCESS;
 }
 
@@ -456,7 +475,7 @@ DEFUN (no_ipv6_pim_priority,
 
 
 void
-pim6_interface_init (void)
+pim6_interface_cmd_init (void)
 {
   /* Install interface node. */
   install_node (&interface_node, config_write_pim6_interface);

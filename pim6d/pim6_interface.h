@@ -49,7 +49,7 @@ struct pim6_interface {
 };
 
 
-void pim6_interface_init (void);
+void pim6_interface_cmd_init (void);
 
 struct pim6_interface * pim6_interface_lookup_by_ifindex (int ifindex);
 

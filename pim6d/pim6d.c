@@ -30,6 +30,7 @@
 #include "pim6_interface.h"
 #include "pim6_sock.h"
 #include "pim6_msg.h"
+#include "pim6_neighbor.h"
 #include "pim6_zebra.h"
 
 extern struct zebra_privs_t pim6d_privs;
@@ -45,7 +46,9 @@ pim6_init (void)
   }
   /* initialize generation id */
   init_gen_id();
-  /* initialize interface command, but where is the interface initialization and the relevant thread for hello?  must be those vty read stuff */
-  pim6_interface_init();
+  /* initialize interface related commands */
+  pim6_interface_cmd_init();
+  /* initialize neighbor related commands */
+  pim6_neighbor_cmd_init();
   pim6_zebra_init();
 }
