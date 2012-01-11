@@ -40,15 +40,16 @@ struct encoded_addr {
 
 
 struct pim_header {
-  uint8_t ver_type;
+#if BYTE_ORDER == BIG_ENDIAN    /* non-portable hack that assumes that GCC is used */
+  uint8_t version: 4;
+  uint8_t type: 4;
+#else
+  uint8_t type: 4;
+  uint8_t version: 4;
+#endif
   uint8_t reserved;
   uint16_t checksum;
 };
-
-/* Macro to manipulate pim_header */
-#define PH_GET_VERSION(x) (((x)->ver_type & 0xf0) >> 4)
-#define PH_GET_TYPE(x)  ((x)->ver_type & 0xf)
-#define PH_SET_TYPE(x, type)  (x)->ver_type = (PIM_VERSION << 4) | (type & 0xf)
 
 /* PIMv6 encoded unicast address */
 struct pim6_enc_uni_addr {
@@ -61,9 +62,15 @@ struct pim6_enc_uni_addr {
 struct pim6_enc_grp_addr {
   uint8_t family;
   uint8_t type;
+#if BYTE_ORDER == BIG_ENDIAN
   uint8_t bidirectional: 1;
   uint8_t reserved: 6;
   uint8_t zone: 1;
+#else
+  uint8_t zone: 1;
+  uint8_t reserved: 6;
+  uint8_t bidirectional: 1;
+#endif
   uint8_t mask_len;
   struct in6_addr address;
 };
@@ -72,10 +79,17 @@ struct pim6_enc_grp_addr {
 struct pim6_enc_src_addr {
   uint8_t family;
   uint8_t type;
+#if BYTE_ORDER == BIG_ENDIAN
   uint8_t reserved: 5;
   uint8_t sparse: 1;
   uint8_t wildcard: 1;
   uint8_t rpt: 1;
+#else
+  uint8_t rpt: 1;
+  uint8_t wildcard: 1;
+  uint8_t sparse: 1;
+  uint8_t reserved: 5;
+#endif
   uint8_t mask_len;
   struct in6_addr address;
 };

@@ -45,7 +45,7 @@ init_gen_id(void)
 static inline int pim6_msg_sane_hdr(struct pim_header * ph, unsigned int len)
 {
   /* For IPv6, checksum is performed by the kernel */
-  return !(len <= sizeof(*ph) || PH_GET_VERSION(ph) != PIM_VERSION || PH_GET_TYPE(ph) > PIM_TYPE_MAX);
+  return !(len <= sizeof(*ph) || ph->version != PIM_VERSION || ph->type > PIM_TYPE_MAX);
 }
 
 /* decode Encoded-Unicast Address */
@@ -340,12 +340,12 @@ pim6_receive(struct thread *thread)
 
   ph = (struct pim_header *) recvbuf;
   zlog_debug("Received length %d", len);
-  zlog_debug("pim version %u type %u reserved %u cksum %u", PH_GET_VERSION(ph), PH_GET_TYPE(ph), ph->reserved, ph->checksum); 
+  zlog_debug("pim version %u type %u reserved %u cksum %u", ph->version, ph->type, ph->reserved, ph->checksum); 
   
   if (!pim6_msg_sane_hdr(ph, len))
     return 0;
 
-  switch (PH_GET_TYPE(ph)) {
+  switch (ph->type) {
   case PIM_TYPE_HELLO:
     pim6_hello_recv(&src, &dst, pi, ph, len);
     break;
@@ -412,7 +412,8 @@ pim6_hello_send(struct thread *thread)
 
   memset(sendbuf, 0, iobuflen);
   ph = (struct pim_header *) sendbuf;
-  PH_SET_TYPE(ph, PIM_TYPE_HELLO);
+  ph->version = PIM_VERSION;
+  ph->type = PIM_TYPE_HELLO;
   offset = sizeof(*ph);
   tlv = (struct pim_tlv *) (sendbuf + offset);
   /* holdtime option */
