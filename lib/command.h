@@ -297,6 +297,7 @@ struct desc
 #define OSPF6_STR "Open Shortest Path First (OSPF) for IPv6\n"
 #define OSPF6_ROUTER_STR "Enable a routing process\n"
 #define OSPF6_INSTANCE_STR "<1-65535> Instance ID\n"
+#define PIM_STR "PIM information\n"
 #define SECONDS_STR "<1-65535> Seconds\n"
 #define ROUTE_STR "Routing Table\n"
 #define PREFIX_LIST_STR "Build a prefix list\n"

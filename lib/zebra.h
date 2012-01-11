@@ -437,7 +437,8 @@ struct in_pktinfo
 #define ZEBRA_ROUTE_ISIS                 8
 #define ZEBRA_ROUTE_BGP                  9
 #define ZEBRA_ROUTE_HSLS		 10
-#define ZEBRA_ROUTE_MAX                  11
+#define ZEBRA_ROUTE_PIM6                 11
+#define ZEBRA_ROUTE_MAX                  12
 
 /* Note: whenever a new route-type or zserv-command is added the
  * corresponding {command,route}_types[] table in lib/log.c MUST be
