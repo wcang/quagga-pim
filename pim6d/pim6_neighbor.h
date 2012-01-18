@@ -18,6 +18,10 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330, 
  * Boston, MA 02111-1307, USA.  
  */
+
+#ifndef PIM6_NEIGHBOR_H
+#define PIM6_NEIGHBOR_H
+
 #include <time.h>
 #include <netinet/in.h>
 
@@ -26,9 +30,15 @@
 #include "linklist.h"
 #include "sockunion.h"
 
+#define PIM_NEIGH_DR_FLAG  0x1
+#define PIM_NEIGH_GENID_FLAG 0x2
 
 struct pim6_neighbor {
+  /* used to indicate which option is set by neighbor */
+  uint8_t flags;
+  /* Neighbor holdtime */
   uint16_t holdtime;
+  /* DR priority information */ 
   uint32_t dr_priority;
   /* generation id stored in network byte order */
   uint32_t gen_id;
@@ -58,3 +68,5 @@ pim6_neighbor_delete (struct pim6_neighbor * pn);
 void
 pim6_neighbor_cmd_init(void);
 
+
+#endif

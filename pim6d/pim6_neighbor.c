@@ -42,6 +42,8 @@ pim6_neighbor_create(struct pim6_interface * pi, struct in6_addr * addr)
 
   memset(pn, 0, sizeof(struct pim6_neighbor));
   pn->pi = pi;
+  pi->neigh_count++;
+  pn->holdtime = PIM_DEF_HELLO_HOLDTIME;
   memcpy(&pn->addr, addr, sizeof(*addr));
   quagga_gettime(QUAGGA_CLK_MONOTONIC, &pn->uptime);
   listnode_add_sort(pi->neighbor_list, pn);
@@ -51,6 +53,7 @@ pim6_neighbor_create(struct pim6_interface * pi, struct in6_addr * addr)
 void
 pim6_neighbor_delete(struct pim6_neighbor * pn)
 {
+  pn->pi->neigh_count--;
   listnode_delete(pn->pi->neighbor_list, pn);
   THREAD_OFF(pn->thread_expiry_timer);
   XFREE (MTYPE_PIM6_NEIGHBOR, pn);
@@ -85,12 +88,14 @@ pim6_neighbor_show (struct vty *vty, struct interface *ifp)
   quagga_gettime(QUAGGA_CLK_MONOTONIC, &now);
 
   for (ALL_LIST_ELEMENTS_RO(pi->neighbor_list, n, pn)) {
+    char * mode = (pn->flags & PIM_NEIGH_GENID_FLAG) ? "G" : " ";
+    char * dr = pim6_interface_is_dr(pi, pn) ? "DR" : " ";
     uptime = time_sub(&now, &pn->uptime);
-    expiry = time_sub(&pn->expiry, &now); 
-    /* FIXME: DR and mode still hasn't been done properly */
+    expiry = time_sub(&pn->expiry, &now);
+     
     vty_out(vty, "%-27s%-19s%-10s%-9s%-5s%-3s%u%s", in6_addr2str(&pn->addr), ifp->name, 
         time2str(&uptime, uptime_buf, sizeof(uptime_buf)), time2str(&expiry, expiry_buf, sizeof(expiry_buf)), 
-        "Mode", "DR", pn->dr_priority, VTY_NEWLINE);
+        mode, dr, pn->dr_priority, VTY_NEWLINE);
   }
 
   return;

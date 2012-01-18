@@ -38,3 +38,21 @@ struct timeval time_sub(struct timeval * a, struct timeval * b)
   return diff;
 }
 
+int in6addr_greater(struct in6_addr * a, struct in6_addr * b)
+{
+  int i;
+  uint8_t * pa, * pb;
+
+  pa = (uint8_t *) a;
+  pb = (uint8_t *) b;
+
+  for (i = 0; i < sizeof(struct in6_addr); i++) {
+    if (*pa > *pb)
+      return 1;
+
+    pa++;
+    pb++;
+  }
+
+  return 0;
+}

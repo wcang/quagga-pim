@@ -1,3 +1,4 @@
+/* TODO: When pim is disabled, all interface resources should be disabled as well */
 /*
  * Copyright (C) 2011 Ang Way Chuang
  *
@@ -110,10 +111,16 @@ pim6_interface_connected_update(struct interface *ifp)
 
   pi->local_addr = pim6_interface_get_linklocal_address(ifp);
 
+  /* FIXME: if the local address is NULL, we got bigger problem. Maybe PIM should
+   * be disabled??
+   */
   if (pi->local_addr == NULL) {
     THREAD_OFF(pi->thread_hello_timer);
     pim6_leave_allpim6routers(ifp->ifindex);
     return;
+  }
+  else {
+    memcpy(&pi->self.addr, pi->local_addr, sizeof(struct in6_addr));
   }
 
   if (pi->enabled) {
@@ -124,9 +131,37 @@ pim6_interface_connected_update(struct interface *ifp)
 }
 
 
+void 
+pim6_interface_reelect_dr(struct pim6_interface * pi)
+{
+  struct listnode *node;
+  struct pim6_neighbor * pn, * dr;
+
+  dr = &pi->self;
+
+  for (ALL_LIST_ELEMENTS_RO(pi->neighbor_list, node, pn)) {
+    if (pi->dr_absent) {
+      if (in6addr_greater(&pn->addr , &dr->addr)) {
+        zlog_debug("DR changed due to non-DR flag");
+        dr = pn;
+      }
+    }
+    else {
+      if (pn->dr_priority > dr->dr_priority || 
+          (pn->dr_priority == dr->dr_priority
+            && in6addr_greater(&pn->addr, &dr->addr))) {
+        zlog_debug("DR changed");
+        dr = pn;
+      }
+    }
+  }
+
+  pi->dr = dr;
+}
+
 /* show specified interface structure */
 static int
-pim6_interface_show (struct vty *vty, struct interface *ifp)
+pim6_interface_show(struct vty *vty, struct interface *ifp)
 {
   struct pim6_interface * pi;
   char addr_str[40];
@@ -136,7 +171,7 @@ pim6_interface_show (struct vty *vty, struct interface *ifp)
   pi = (struct pim6_interface *) ifp->info;
   
   if (pi == NULL) {
-    vty_out(vty, "%-20s%-4s%-6d%-7d%d%s", ifp->name, "off", 0, PIM_DEF_HELLO_INTERVAL, PIM_DEF_DR_PRIOR, VTY_NEWLINE);
+    vty_out(vty, "%-19s%-4s%-6d%-7d%d%s", ifp->name, "off", 0, PIM_DEF_HELLO_INTERVAL, PIM_DEF_DR_PRIOR, VTY_NEWLINE);
     /* crap, this is wrong because the struct in6_addr is returned */
     local_addr = pim6_interface_get_linklocal_address(ifp);
 
@@ -151,11 +186,14 @@ pim6_interface_show (struct vty *vty, struct interface *ifp)
     vty_out(vty, "DR     : not elected%s", VTY_NEWLINE);
   }
   else {
-    /* FIXME: Get the neighbour count right, for now let's put 0 for neighbour count */
-    vty_out(vty, "%-20s%-4s%-6d%-7d%d%s", ifp->name, (pi->enabled) ? "on" : "off" , 0, pi->hello_interval, pi->dr_priority, VTY_NEWLINE);
+    vty_out(vty, "%-19s%-4s%-6d%-7d%d%s", ifp->name, (pi->enabled) ? "on" : "off" , 
+        pi->neigh_count, pi->hello_interval, pi->dr_priority, VTY_NEWLINE);
     vty_out(vty, "Address: %s%s", in6_addr2str(pi->local_addr), VTY_NEWLINE);
-    /* FIXME: print "this system" if this interface is selected as DR */
-    vty_out(vty, "DR     : not elected%s", VTY_NEWLINE);
+
+    if (pim6_interface_am_dr(pi))
+      vty_out(vty, "DR     : this system%s", VTY_NEWLINE);
+    else
+      vty_out(vty, "DR     : not elected%s", VTY_NEWLINE);
   }
 
   return 0;
@@ -246,7 +284,14 @@ pim6_interface_create(struct interface *ifp)
   pi->neighbor_list->cmp = pim6_neighbor_cmp;
   ifp->info = pi;
   pi->interface = ifp;
-  
+  pi->self.flags = PIM_NEIGH_DR_FLAG | PIM_NEIGH_GENID_FLAG;
+  pi->dr = &pi->self;
+  pi->neigh_count = 0;
+  pi->dr_absent = 0;
+
+  if (pi->local_addr)
+    memcpy(&pi->self.addr, pi->local_addr, sizeof(struct in6_addr));
+
   if (if_is_up(ifp)) {
     zlog_debug("Interface %s is up", ifp->name);
     pim6_join_allpim6routers(ifp->ifindex);
@@ -440,7 +485,7 @@ DEFUN (ipv6_pim_priority,
   if (pi->dr_priority == priority)
     return CMD_SUCCESS;
   
-  pi->dr_priority = priority; 
+  pi->self.dr_priority = pi->dr_priority = priority; 
   pi->thread_hello_timer = thread_execute(master, pim6_hello_send, ifp, 0);
   return CMD_SUCCESS;
 }

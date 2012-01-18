@@ -174,11 +174,14 @@ static int
 expire_neighbor(struct thread *thread)
 {
   struct pim6_neighbor * pn;
+  struct pim6_interface * pi;
 
   pn = (struct pim6_neighbor *) THREAD_ARG(thread);
   THREAD_OFF(pn->thread_expiry_timer);
   zlog_debug("PIM neighbor %s on interface %s expired", in6_addr2str(&pn->addr), pn->pi->interface->name);
+  pi = pn->pi;
   pim6_neighbor_delete(pn);
+  pim6_interface_reelect_dr(pi);
   return 0;
 }
 
@@ -190,6 +193,7 @@ pim6_hello_recv(struct in6_addr *src, struct in6_addr *dst,
 {
   uint8_t new_neigh = 0;
   uint8_t neigh_changed = 0;
+  uint8_t need_elect = 0;
   struct pim_tlv * tlv; 
   uint16_t current_len;
   struct pim6_neighbor * pn;
@@ -242,6 +246,7 @@ pim6_hello_recv(struct in6_addr *src, struct in6_addr *dst,
           goto fail_exit;
         }
 
+        pn->flags |= PIM_NEIGH_DR_FLAG;
         pn->dr_priority = ntohl(*(uint32_t *) tlv->value); 
         break;
       case HELLO_TYPE_GENID:
@@ -250,11 +255,12 @@ pim6_hello_recv(struct in6_addr *src, struct in6_addr *dst,
           goto fail_exit;
         }
         
-        if (!new_neigh && pn->gen_id != *((uint32_t *) tlv->value))
+        if (!(pn->flags & PIM_NEIGH_GENID_FLAG) || (!new_neigh && pn->gen_id != *((uint32_t *) tlv->value)))
           neigh_changed = 1;
 
         /* TODO: need to propogate the change if the generation id is changed */
         pn->gen_id = *((uint32_t *) tlv->value);
+        pn->flags |= PIM_NEIGH_GENID_FLAG;
         break;
       case HELLO_TYPE_ADDR_LIST:
         /* TODO */
@@ -268,8 +274,23 @@ pim6_hello_recv(struct in6_addr *src, struct in6_addr *dst,
     tlv = (struct pim_tlv *) ((caddr_t) tlv + current_len);
   }
 
+  /* this neighbor doesn't send DR priority */
+  if (!(pn->flags & PIM_NEIGH_DR_FLAG)) {
+    if (!pi->dr_absent)
+      need_elect = 1;
+    pi->dr_absent = 1;
+  }
+
   /*TODO: do something if neighbor is changed */
-  
+  if (new_neigh || neigh_changed || need_elect) {
+    /* re-elect the DR */
+    pim6_interface_reelect_dr(pi);
+  }
+ 
+  /* TODO: if new neighbor is detected, send hello immediately so that PIM neighbor can recognize
+   * us immediately
+   */
+
   /* reschedule expiry timer if the expiry time wasn't infinity */
   if (pn->holdtime != 0xffff) {
     pn->thread_expiry_timer = thread_add_timer(master, expire_neighbor, pn, pn->holdtime);

@@ -19,3 +19,6 @@ static inline void time_inc(struct timeval * tv, unsigned int seconds)
 }
 
 struct timeval time_sub(struct timeval * a, struct timeval * b);
+
+/* return 1 if a is greater than b, otherwise 0 */
+int in6addr_greater(struct in6_addr * a, struct in6_addr * b);
