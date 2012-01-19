@@ -123,10 +123,11 @@ pim6_interface_connected_update(struct interface *ifp)
     memcpy(&pi->self.addr, pi->local_addr, sizeof(struct in6_addr));
   }
 
-  if (pi->enabled) {
+  if (pi->enabled && pi->local_addr) {
     THREAD_OFF(pi->thread_hello_timer);
     pim6_join_allpim6routers(ifp->ifindex);
     pi->thread_hello_timer = thread_execute(master, pim6_hello_send, ifp, 0);
+    pim6_interface_reelect_dr(pi);
   }
 }
 
@@ -137,12 +138,12 @@ pim6_interface_reelect_dr(struct pim6_interface * pi)
   struct listnode *node;
   struct pim6_neighbor * pn, * dr;
 
+  zlog_debug("%s", __FUNCTION__);
   dr = &pi->self;
 
   for (ALL_LIST_ELEMENTS_RO(pi->neighbor_list, node, pn)) {
     if (pi->dr_absent) {
       if (in6addr_greater(&pn->addr , &dr->addr)) {
-        zlog_debug("DR changed due to non-DR flag");
         dr = pn;
       }
     }
@@ -150,13 +151,15 @@ pim6_interface_reelect_dr(struct pim6_interface * pi)
       if (pn->dr_priority > dr->dr_priority || 
           (pn->dr_priority == dr->dr_priority
             && in6addr_greater(&pn->addr, &dr->addr))) {
-        zlog_debug("DR changed");
         dr = pn;
       }
     }
   }
 
-  pi->dr = dr;
+  if (pi->dr != dr) {
+    /* TODO: DR has changed, we should do something about it */
+    pi->dr = dr;
+  }
 }
 
 /* show specified interface structure */
@@ -485,8 +488,9 @@ DEFUN (ipv6_pim_priority,
   if (pi->dr_priority == priority)
     return CMD_SUCCESS;
   
-  pi->self.dr_priority = pi->dr_priority = priority; 
+  pi->self.dr_priority = pi->dr_priority = priority;
   pi->thread_hello_timer = thread_execute(master, pim6_hello_send, ifp, 0);
+  pim6_interface_reelect_dr(pi);
   return CMD_SUCCESS;
 }
 
