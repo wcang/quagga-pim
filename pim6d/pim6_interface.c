@@ -174,7 +174,7 @@ pim6_interface_show(struct vty *vty, struct interface *ifp)
   pi = (struct pim6_interface *) ifp->info;
   
   if (pi == NULL) {
-    vty_out(vty, "%-19s%-4s%-6d%-7d%d%s", ifp->name, "off", 0, PIM_DEF_HELLO_INTERVAL, PIM_DEF_DR_PRIOR, VTY_NEWLINE);
+    vty_out(vty, "%-19s%-5s%-6d%-7d%d%s", ifp->name, "off", 0, PIM_DEF_HELLO_INTERVAL, PIM_DEF_DR_PRIOR, VTY_NEWLINE);
     /* crap, this is wrong because the struct in6_addr is returned */
     local_addr = pim6_interface_get_linklocal_address(ifp);
 
@@ -189,7 +189,7 @@ pim6_interface_show(struct vty *vty, struct interface *ifp)
     vty_out(vty, "DR     : not elected%s", VTY_NEWLINE);
   }
   else {
-    vty_out(vty, "%-19s%-4s%-6d%-7d%d%s", ifp->name, (pi->enabled) ? "on" : "off" , 
+    vty_out(vty, "%-19s%-5s%-6d%-7d%d%s", ifp->name, (pi->enabled) ? "on" : "off" , 
         pi->neigh_count, pi->hello_interval, pi->dr_priority, VTY_NEWLINE);
     vty_out(vty, "Address: %s%s", in6_addr2str(pi->local_addr), VTY_NEWLINE);
 
