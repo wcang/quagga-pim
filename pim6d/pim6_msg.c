@@ -240,6 +240,13 @@ pim6_hello_recv(struct in6_addr *src, struct in6_addr *dst,
       case HELLO_TYPE_LAN_PRUNE_DELAY:
         /* TODO */
         break;
+      case HELLO_TYPE_BIDIR:
+        if (tlv->length != 0) {
+          zlog_err("Invalid length %u PIM Bidirectional option", tlv->length);
+          goto fail_exit;
+        }
+        pn->flags |= PIM_NEIGH_BIDIR_FLAG;
+        break;
       case HELLO_TYPE_DR_PRIORITY:
         if (tlv->length != 4) {
           zlog_err("Invalid length %u PIM Hello DR Priority option\n", tlv->length);

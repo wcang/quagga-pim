@@ -32,6 +32,7 @@
 
 #define PIM_NEIGH_DR_FLAG  0x1
 #define PIM_NEIGH_GENID_FLAG 0x2
+#define PIM_NEIGH_BIDIR_FLAG 0x4
 
 struct pim6_neighbor {
   /* used to indicate which option is set by neighbor */

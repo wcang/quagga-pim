@@ -88,12 +88,15 @@ pim6_neighbor_show (struct vty *vty, struct interface *ifp)
   quagga_gettime(QUAGGA_CLK_MONOTONIC, &now);
 
   for (ALL_LIST_ELEMENTS_RO(pi->neighbor_list, n, pn)) {
-    char * mode = (pn->flags & PIM_NEIGH_GENID_FLAG) ? "G" : " ";
+    char mode[5];
     char * dr = pim6_interface_is_dr(pi, pn) ? "DR" : " ";
+    
+    sprintf(mode, "%s%s ", ((pn->flags & PIM_NEIGH_BIDIR_FLAG) ? "B" : ""),
+        ((pn->flags & PIM_NEIGH_GENID_FLAG) ? "G" : ""));
     uptime = time_sub(&now, &pn->uptime);
     expiry = time_sub(&pn->expiry, &now);
      
-    vty_out(vty, "%-27s%-19s%-10s%-9s%-5s%-3s%u%s", in6_addr2str(&pn->addr), ifp->name, 
+    vty_out(vty, "%-27s%-19s%-10s%-9s%5s%-3s%u%s", in6_addr2str(&pn->addr), ifp->name, 
         time2str(&uptime, uptime_buf, sizeof(uptime_buf)), time2str(&expiry, expiry_buf, sizeof(expiry_buf)), 
         mode, dr, pn->dr_priority, VTY_NEWLINE);
   }
