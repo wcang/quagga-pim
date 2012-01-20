@@ -188,7 +188,7 @@ expire_neighbor(struct thread *thread)
 
 static void
 pim6_hello_recv(struct in6_addr *src, struct in6_addr *dst,
-                  struct pim6_interface * pi, struct pim_header * ph,
+                  struct pim6_interface * pi, unsigned char * msg,
                   unsigned int msg_len)
 {
   uint8_t new_neigh = 0;
@@ -212,8 +212,7 @@ pim6_hello_recv(struct in6_addr *src, struct in6_addr *dst,
   }
   
   THREAD_OFF(pn->thread_expiry_timer);
-  tlv = (struct pim_tlv *) ((caddr_t) ph + sizeof(struct pim_header));
-  msg_len -= sizeof(struct pim_header);
+  tlv = (struct pim_tlv *) msg;
 
   while (msg_len > sizeof(*tlv)) {
     tlv->type = ntohs(tlv->type);
@@ -314,22 +313,135 @@ fail_exit:
 /* receive join/prune message and process them */
 static void
 pim6_jp_recv(struct in6_addr *src, struct in6_addr *dst,
-                  struct pim6_interface * pi, struct pim_header * ph,
+                  struct pim6_interface * pi, unsigned char * msg,
                   unsigned int msg_len)
 {
+  uint8_t num_group;
+  uint16_t holdtime;
   uint16_t current_len;
+  uint16_t num_join;
+  uint16_t num_prune;
   struct pim6_neighbor * pn;
+  struct pim6_enc_uni_addr * upstream_neigh;
+  struct pim6_enc_grp_addr * grp_addr;
+  struct pim6_enc_src_addr * src_addr;
 
   zlog_info("Processing PIM Join Prune from %s", in6_addr2str(src));   
   pn = pim6_neighbor_lookup(pi, src);
   
   if (pn == NULL) {
-    zlog_info("%s is not in our neighbor list yet", in6_addr2str(src));
+    zlog_err("%s is not in our neighbor list yet", in6_addr2str(src));
     return;
   }
 
-    
+  if (msg_len < sizeof(struct pim6_enc_uni_addr) + 4) {
+    zlog_err("PIM Join/Prune message is less than the minimum required length. Discard message");
+    return;
+  }
+
+  upstream_neigh = (struct pim6_enc_uni_addr *) msg;
+  zlog_debug("family %u type %u upstream neighbor: %s", upstream_neigh->family, upstream_neigh->type,
+      in6_addr2str(&upstream_neigh->address));
+  zlog_debug("my address: %s", in6_addr2str(pi->local_addr));
   
+
+  if (!IN6_ARE_ADDR_EQUAL(&upstream_neigh->address, pi->local_addr)) {
+    /* TODO: For fast convergence, we need to monitor Join/Prune even if we aren't the target.
+     * For simplicity, we should disregard it for now
+     */
+    return;
+  }
+    
+  msg += sizeof(*upstream_neigh) + 1; /* skip the reserved byte */
+  num_group = *msg;
+  msg++;
+  holdtime = ntohs(*((uint16_t *) msg));
+  msg += 2;
+  zlog_debug("num group %u holdtime %u", num_group, holdtime);
+  msg_len -= sizeof(struct pim6_enc_uni_addr) + 4;
+  
+  /* TODO: sanity check to ensure that there is no duplication of group/source address */
+  while (num_group) {
+    if (msg_len < sizeof(struct pim6_enc_grp_addr) + 4) {
+      zlog_err("PIM Join/Prune message group record truncated. Stop processing");
+      return;
+    }
+
+    grp_addr = (struct pim6_enc_grp_addr *) msg;
+    /* TODO: do something about group */
+    if (grp_addr->family != AF_IPV6) {
+      zlog_err("IPv6 address is expected for group address, but non IPv6 address is received. Discard remaining message");
+      return;
+    }
+
+    if (grp_addr->type != 0) {
+      zlog_err("Unable to decode non-default IPv6 group address. Discard remaining message");
+      return;
+    }
+
+    zlog_debug("Group address: %s/%u Bidirectional: %u Zone: %u", in6_addr2str(&grp_addr->address), grp_addr->mask_len,
+       grp_addr->bidirectional, grp_addr->zone); 
+
+    msg += sizeof(struct pim6_enc_grp_addr);
+    num_join = ntohs(*(uint16_t *) msg);
+    msg += 2;
+    num_prune = ntohs(*(uint16_t *) msg);
+    msg += 2;
+    msg_len -= sizeof(struct pim6_enc_grp_addr) + 4;
+
+    if (msg_len < (num_join + num_prune) * sizeof(struct pim6_enc_src_addr)) {
+      zlog_err("PIM Join/Prune message source list truncated. Stop processing");
+      return;
+    }
+
+    msg_len -= (num_join + num_prune) * sizeof(struct pim6_enc_src_addr);
+
+    while (num_join) {
+      src_addr = (struct pim6_enc_src_addr *) msg;
+
+      if (src_addr->type != 0) {
+        zlog_err("Unable to decode non-default join source address type. Discard remaining message");
+        return;
+      }
+
+      /* TODO: print or do something */
+      if (src_addr->family == AF_IPV6) {
+        zlog_debug("Joined source: %s sparse: %u wildcard: %u rpt: %u", in6_addr2str(&src_addr->address),
+            src_addr->sparse, src_addr->wildcard, src_addr->rpt);
+      }
+      else {
+        zlog_err("IPv6 address is expected for joined source address, but non IPv6 address is received. Discard remaining message");
+        return;
+      }
+
+      msg += sizeof(struct pim6_enc_src_addr);
+      num_join--;
+    }
+
+    while (num_prune) {
+      src_addr = (struct pim6_enc_src_addr *) msg;
+      /* TODO: print or do something */
+      if (src_addr->type != 0) {
+        zlog_err("Unable to decode non-default pruned source address type. Discard remaining message");
+        return;
+      }
+
+      /* TODO: print or do something */
+      if (src_addr->family == AF_IPV6) {
+        zlog_debug("Pruned source: %s sparse: %u wildcard: %u rpt: %u", in6_addr2str(&src_addr->address),
+            src_addr->sparse, src_addr->wildcard, src_addr->rpt);
+      }
+      else {
+        zlog_err("IPv6 address is expected for pruned source address, but non IPv6 address is received. Discard remaining message");
+        return;
+      }
+
+      msg += sizeof(struct pim6_enc_src_addr);
+      num_prune--;
+    }
+
+    num_group--;
+  }
 }
 
 
@@ -373,9 +485,11 @@ pim6_receive(struct thread *thread)
   if (!pim6_msg_sane_hdr(ph, len))
     return 0;
 
+  len -= sizeof(*ph);
+
   switch (ph->type) {
   case PIM_TYPE_HELLO:
-    pim6_hello_recv(&src, &dst, pi, ph, len);
+    pim6_hello_recv(&src, &dst, pi, (unsigned char *) (ph + 1), len);
     break;
   case PIM_TYPE_REGISTER:
     zlog_warn("PIM Register not implemented yet\n");
@@ -384,7 +498,7 @@ pim6_receive(struct thread *thread)
     zlog_warn("PIM Register Stop not implemented yet\n");
     break;
   case PIM_TYPE_JOIN_PRUNE:
-    pim6_jp_recv(&src, &dst, pi, ph, len);
+    pim6_jp_recv(&src, &dst, pi, (unsigned char *) (ph + 1), len);
     break;
   case PIM_TYPE_ASSERT:
     zlog_warn("PIM Assert not implemented yet\n");

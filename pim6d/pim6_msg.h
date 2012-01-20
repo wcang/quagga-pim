@@ -53,11 +53,11 @@ struct pim_header {
 };
 
 /* PIMv6 encoded unicast address */
-struct pim6_enc_uni_addr {
+typedef struct pim6_enc_uni_addr {
   uint8_t family;
   uint8_t type;
   struct in6_addr address;
-};
+} __attribute__((packed));
 
 /* PIMv6 encoded group address */
 struct pim6_enc_grp_addr {
@@ -74,7 +74,7 @@ struct pim6_enc_grp_addr {
 #endif
   uint8_t mask_len;
   struct in6_addr address;
-};
+} __attribute__((packed));
 
 /* PIMv6 encoded source address */
 struct pim6_enc_src_addr {
@@ -93,7 +93,7 @@ struct pim6_enc_src_addr {
 #endif
   uint8_t mask_len;
   struct in6_addr address;
-};
+} __attribute__((packed));
 
 /* PIM Hello TLV */
 struct pim_tlv {
