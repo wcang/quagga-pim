@@ -209,17 +209,14 @@ pim6_zebra_read_ipv6 (int command, struct zclient *zclient,
 static int
 config_write_pim6_zebra (struct vty *vty)
 {
-  if (! zclient->enable)
-    {
-      vty_out (vty, "no router zebra%s", VTY_NEWLINE);
-      vty_out (vty, "!%s", VTY_NEWLINE);
-    }
-  else if (! zclient->redist[ZEBRA_ROUTE_PIM6])
-    {
-      vty_out (vty, "router zebra%s", VTY_NEWLINE);
-      vty_out (vty, " no redistribute pim6%s", VTY_NEWLINE);
-      vty_out (vty, "!%s", VTY_NEWLINE);
-    }
+  if (! zclient->enable) {
+    vty_out (vty, "no router zebra%s", VTY_NEWLINE);
+    vty_out (vty, "!%s", VTY_NEWLINE);
+  }
+  else {
+    vty_out (vty, "router zebra%s", VTY_NEWLINE);
+    vty_out (vty, "!%s", VTY_NEWLINE);
+  }
   return 0;
 }
   
@@ -278,38 +275,6 @@ DEFUN (no_router_zebra,
 }
   
 
-DEFUN (redistribute_pim6,
-       redistribute_pim6_cmd,
-       "redistribute pim6",
-       "Redistribute control\n"
-       "PIM6 route\n")
-{
-  if (zclient->redist[ZEBRA_ROUTE_PIM6])
-    return CMD_SUCCESS;
-
-  zclient->redist[ZEBRA_ROUTE_PIM6] = 1;
-
-  /* TODO: send pim6 route to zebra route table, need to look at Balaji's work */
-  return CMD_SUCCESS;
-}
-
-
-DEFUN (no_redistribute_pim6,
-       no_redistribute_pim6_cmd,
-       "no redistribute pim6",
-       NO_STR
-       "Redistribute control\n"
-       "PIM6 route\n")
-{
-  if (! zclient->redist[ZEBRA_ROUTE_PIM6])
-    return CMD_SUCCESS;
-
-  zclient->redist[ZEBRA_ROUTE_PIM6] = 0;
-
-  /* TODO: send pim6 route to zebra route table, need to look at Balaji's work */
-  return CMD_SUCCESS;
-}
-
 /* Zebra node structure. */
 static struct cmd_node zebra_node =
 {
@@ -317,13 +282,37 @@ static struct cmd_node zebra_node =
   "%s(config-zebra)# ",
 };
 
+/* Since PIM daemon doesn't learn about any route information, it needs to learn about
+ * route information from all other routing daemons
+ */
+static void
+pim6_zebra_redistribute_all()
+{
+  int i;
+  
+  for (i = 1; i < ZEBRA_ROUTE_MAX; i++) {
+    zclient->redist[i] = 1;
+    zebra_redistribute_send(ZEBRA_REDISTRIBUTE_ADD, zclient, i);
+  }
+
+  /* restribute default route too */
+  zclient_redistribute_default(ZEBRA_REDISTRIBUTE_DEFAULT_ADD, zclient);
+}
+
 
 void
 pim6_zebra_init (void)
 {
   /* Allocate zebra structure. */
   zclient = zclient_new ();
-  zclient_init(zclient, ZEBRA_ROUTE_PIM6);
+  /* FIXME: not sure if we should define ZEBRA_ROUTE_PIM6 instead of using 0
+   * (ZEBRA_ROUTE_SYSTEM) because redist_default is set 0 in this case
+   * Should not have issue because we don't add new route to the system
+   */
+  zclient_init(zclient, 0);
+  /* redistribute all routes by default */
+  pim6_zebra_redistribute_all();
+
   zclient->router_id_update = NULL;
   zclient->interface_add = pim6_zebra_if_add;
   zclient->interface_delete = pim6_zebra_if_del;
@@ -336,21 +325,17 @@ pim6_zebra_init (void)
   zclient->ipv6_route_add = pim6_zebra_read_ipv6;
   zclient->ipv6_route_delete = pim6_zebra_read_ipv6;
 
-  /* redistribute connected route by default */
-  /* ospf6_zebra_redistribute (ZEBRA_ROUTE_CONNECT); */
-
+  /* Not sure what good is pim6d without zebra. PIM relies on other
+   * routing daemon to learn about route
+   */
   /* Install zebra node. */
   install_node (&zebra_node, config_write_pim6_zebra);
-
   /* Install command element for zebra node. */
   install_element (VIEW_NODE, &show_zebra_cmd);
   install_element (ENABLE_NODE, &show_zebra_cmd);
   install_element (CONFIG_NODE, &router_zebra_cmd);
   install_element (CONFIG_NODE, &no_router_zebra_cmd);
-
   install_default (ZEBRA_NODE);
-  install_element (ZEBRA_NODE, &redistribute_pim6_cmd);
-  install_element (ZEBRA_NODE, &no_redistribute_pim6_cmd);
 
   return;
 }
