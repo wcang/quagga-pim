@@ -28,17 +28,6 @@ enum hello_type {
   HELLO_TYPE_ADDR_LIST = 24
 };
 
-/* Flag for Encoded-Source Address */
-#define ENC_SRC_FLAG_SPARSE  0x4
-#define ENC_SRC_FLAG_WC      0x2  /* Wildcard */
-#define ENC_SRC_FLAG_RPT     0x1
-
-/* For Encoded-Group Address and Encoded-Source Address */
-struct encoded_addr {
-  uint8_t mask;
-  struct prefix prefix;
-};
-
 
 struct pim_header {
 #if BYTE_ORDER == BIG_ENDIAN    /* non-portable hack that assumes that GCC is used */
